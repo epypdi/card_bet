@@ -1,865 +1,427 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Chips & Pots</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
-    <style>
-        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #f8fafc; }
-        .glass-panel { background: rgba(30, 41, 59, 0.75); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); }
-        .poker-gold-panel { background: rgba(15, 23, 42, 0.95); border: 1px solid rgba(245, 158, 11, 0.4); box-shadow: 0 0 25px rgba(245, 158, 11, 0.15); }
-        .hide { display: none !important; }
-        .toast { transition: opacity 0.3s ease-in-out, transform 0.3s ease-in-out; }
-        
-        /* Playing Card Styles */
-        .poker-card {
-            background-color: #ffffff;
-            color: #1e293b;
-            border-radius: 4px;
-            padding: 2px 4px;
-            font-weight: 800;
-            font-size: 0.75rem;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.4);
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            min-width: 26px;
-            height: 34px;
-            border: 1px solid #cbd5e1;
-        }
-        .poker-card.red {
-            color: #dc2626;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>실시간 로컬 베팅 칩 관리자</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- MQTT.js (별도 API 키 없이 실시간 실시간 다중 통신 가능) -->
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;600;800&display=swap');
+    body { font-family: 'Noto Sans KR', sans-serif; }
+    .card-suit { font-size: 0.9em; }
+    .suit-red { color: #ef4444; }
+    .suit-black { color: #1e293b; }
+  </style>
 </head>
-<body class="h-screen w-screen overflow-hidden flex flex-col items-center justify-center relative select-none">
+<body class="bg-slate-900 text-white min-h-screen flex flex-col items-center justify-center p-3">
 
-    <!-- Toast Notification Container -->
-    <div id="toast-container" class="absolute top-4 left-0 right-0 z-50 flex flex-col items-center pointer-events-none gap-2 px-4"></div>
-
-    <!-- General Input Modal -->
-    <div id="custom-modal" class="absolute inset-0 z-40 bg-black bg-opacity-70 hide flex items-center justify-center p-4">
-        <div class="glass-panel p-6 rounded-2xl w-full max-w-sm flex flex-col gap-4 shadow-2xl border-indigo-500/30">
-            <h3 id="modal-title" class="text-xl font-bold text-white text-center"></h3>
-            <p id="modal-desc" class="text-sm text-slate-300 text-center"></p>
-            <input type="number" id="modal-input" class="bg-slate-800 border border-slate-600 rounded-xl px-4 py-3 text-white text-center text-lg focus:outline-none focus:border-indigo-500 w-full" placeholder="금액 입력" min="1">
-            <div class="flex gap-2 mt-2">
-                <button id="modal-cancel" class="flex-1 py-3 rounded-xl bg-slate-700 text-white font-semibold hover:bg-slate-600 transition">취소</button>
-                <button id="modal-confirm" class="flex-1 py-3 rounded-xl bg-indigo-600 text-white font-semibold hover:bg-indigo-500 transition">확인</button>
-            </div>
+  <!-- 1. 입장 / 방 생성 화면 -->
+  <div id="login-screen" class="w-full max-w-md bg-slate-800 p-6 rounded-2xl shadow-2xl border border-slate-700">
+    <h1 class="text-2xl font-black text-center text-amber-400 mb-6 flex items-center justify-center gap-2">
+      ♠️ 홀덤/보드게임 칩 베팅 🪙
+    </h1>
+    
+    <div class="space-y-4">
+      <div>
+        <label class="block text-xs font-semibold text-slate-400 mb-1">내 플레이어 이름</label>
+        <input type="text" id="input-name" placeholder="예: 홍길동" class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-xl focus:outline-none focus:border-amber-400 text-white font-bold">
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-400 mb-1">방 이름 (친구들과 공유할 코드)</label>
+        <input type="text" id="input-room" value="friends-bet" class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-xl focus:outline-none focus:border-amber-400 text-white font-bold">
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 mb-1">1코인당 금액 (원)</label>
+          <input type="number" id="input-coin-val" value="1000" class="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl focus:outline-none focus:border-amber-400 text-white">
         </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 mb-1">시작 칩 개수</label>
+          <input type="number" id="input-init-chips" value="50" class="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl focus:outline-none focus:border-amber-400 text-white">
+        </div>
+      </div>
+
+      <button onclick="joinRoom()" class="w-full py-4 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-black rounded-xl text-lg shadow-lg active:scale-95 transition">
+        입장하기 🚀
+      </button>
+    </div>
+  </div>
+
+  <!-- 2. 메인 게임 화면 -->
+  <div id="game-screen" class="w-full max-w-md hidden flex-col gap-4">
+    <!-- 헤더 -->
+    <div class="bg-slate-800/90 backdrop-blur p-4 rounded-2xl border border-slate-700 flex justify-between items-center shadow-lg">
+      <div>
+        <div class="text-xs text-slate-400">방 코드: <span id="display-room" class="font-bold text-amber-400"></span></div>
+        <div class="text-xs text-slate-400">1코인 = <span id="display-coin-val" class="font-bold text-emerald-400"></span>원</div>
+      </div>
+      <button onclick="openModal('jokbo-modal')" class="px-3 py-2 bg-amber-500/20 border border-amber-500/50 text-amber-300 rounded-xl font-bold text-sm flex items-center gap-1 hover:bg-amber-500/30 active:scale-95 transition">
+        📜 족보
+      </button>
     </div>
 
-    <!-- Hand Rankings Modal (족보 보기) -->
-    <div id="poker-hands-modal" class="absolute inset-0 z-40 bg-black/80 backdrop-blur-sm hide flex items-center justify-center p-3">
-        <div class="poker-gold-panel p-4 md:p-6 rounded-2xl w-full max-w-md max-h-[85vh] flex flex-col gap-4 shadow-2xl relative">
-            
-            <!-- Header -->
-            <div class="flex items-center justify-between border-b border-amber-500/30 pb-3">
-                <div class="flex items-center gap-2">
-                    <span class="text-xl">♠️</span>
-                    <h3 class="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-300 via-amber-400 to-yellow-500">
-                        홀덤 족보 한눈에 보기
-                    </h3>
-                </div>
-                <button id="btn-close-hands" class="w-8 h-8 rounded-full bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 flex items-center justify-center font-bold text-lg transition">
-                    ✕
-                </button>
-            </div>
+    <!-- 중앙 팟 (Pot) 표시 -->
+    <div class="bg-gradient-to-b from-slate-800 to-slate-900 p-6 rounded-2xl border-2 border-amber-500/40 text-center shadow-xl relative overflow-hidden">
+      <div class="text-xs font-bold text-amber-400/80 tracking-widest uppercase mb-1">CURRENT POT</div>
+      <div class="text-5xl font-black text-amber-400 drop-shadow mb-1"><span id="pot-count">0</span> <span class="text-2xl">🪙</span></div>
+      <div class="text-sm font-semibold text-slate-400">약 <span id="pot-money">0</span> 원</div>
 
-            <!-- Hand List Scroll Area -->
-            <div class="overflow-y-auto flex flex-col gap-2.5 pr-1 text-xs">
-                
-                <!-- 1. 로얄 플러쉬 -->
-                <div class="bg-slate-800/80 p-3 rounded-xl border border-amber-500/30 flex flex-col gap-1.5">
-                    <div class="flex justify-between items-center">
-                        <span class="font-extrabold text-amber-400 text-sm">1. 로얄플러쉬</span>
-                        <span class="text-slate-400 text-[11px]">A, K, Q, J, 10 문양이 같음</span>
-                    </div>
-                    <div class="flex gap-1.5">
-                        <span class="poker-card">A♠</span>
-                        <span class="poker-card">K♠</span>
-                        <span class="poker-card">Q♠</span>
-                        <span class="poker-card">J♠</span>
-                        <span class="poker-card">10♠</span>
-                    </div>
-                </div>
-
-                <!-- 2. 스트레이트 플러쉬 -->
-                <div class="bg-slate-800/80 p-3 rounded-xl border border-amber-500/20 flex flex-col gap-1.5">
-                    <div class="flex justify-between items-center">
-                        <span class="font-extrabold text-amber-300 text-sm">2. 스트레이트플러쉬</span>
-                        <span class="text-slate-400 text-[11px]">스트레이트 문양이 같음</span>
-                    </div>
-                    <div class="flex gap-1.5">
-                        <span class="poker-card red">9♥</span>
-                        <span class="poker-card red">8♥</span>
-                        <span class="poker-card red">7♥</span>
-                        <span class="poker-card red">6♥</span>
-                        <span class="poker-card red">5♥</span>
-                    </div>
-                </div>
-
-                <!-- 3. 포카드 -->
-                <div class="bg-slate-800/80 p-3 rounded-xl border border-slate-700 flex flex-col gap-1.5">
-                    <div class="flex justify-between items-center">
-                        <span class="font-bold text-white text-sm">3. 포카드</span>
-                        <span class="text-slate-400 text-[11px]">같은 카드가 4장</span>
-                    </div>
-                    <div class="flex gap-1.5">
-                        <span class="poker-card">A♠</span>
-                        <span class="poker-card red">A♥</span>
-                        <span class="poker-card">A♣</span>
-                        <span class="poker-card red">A♦</span>
-                        <span class="poker-card">K♠</span>
-                    </div>
-                </div>
-
-                <!-- 4. 풀하우스 -->
-                <div class="bg-slate-800/80 p-3 rounded-xl border border-slate-700 flex flex-col gap-1.5">
-                    <div class="flex justify-between items-center">
-                        <span class="font-bold text-white text-sm">4. 풀하우스</span>
-                        <span class="text-slate-400 text-[11px]">트리플 + 원페어</span>
-                    </div>
-                    <div class="flex gap-1.5">
-                        <span class="poker-card">A♣</span>
-                        <span class="poker-card red">A♦</span>
-                        <span class="poker-card red">A♥</span>
-                        <span class="poker-card">K♣</span>
-                        <span class="poker-card red">K♥</span>
-                    </div>
-                </div>
-
-                <!-- 5. 플러쉬 -->
-                <div class="bg-slate-800/80 p-3 rounded-xl border border-slate-700 flex flex-col gap-1.5">
-                    <div class="flex justify-between items-center">
-                        <span class="font-bold text-white text-sm">5. 플러쉬</span>
-                        <span class="text-slate-400 text-[11px]">같은 문양 5장</span>
-                    </div>
-                    <div class="flex gap-1.5">
-                        <span class="poker-card">A♠</span>
-                        <span class="poker-card">K♠</span>
-                        <span class="poker-card">10♠</span>
-                        <span class="poker-card">7♠</span>
-                        <span class="poker-card">3♠</span>
-                    </div>
-                </div>
-
-                <!-- 6. 스트레이트 -->
-                <div class="bg-slate-800/80 p-3 rounded-xl border border-slate-700 flex flex-col gap-1.5">
-                    <div class="flex justify-between items-center">
-                        <span class="font-bold text-white text-sm">6. 스트레이트</span>
-                        <span class="text-slate-400 text-[11px]">연속된 숫자 5장</span>
-                    </div>
-                    <div class="flex gap-1.5">
-                        <span class="poker-card">10♣</span>
-                        <span class="poker-card">9♣</span>
-                        <span class="poker-card">8♠</span>
-                        <span class="poker-card red">7♦</span>
-                        <span class="poker-card red">6♥</span>
-                    </div>
-                </div>
-
-                <!-- 7. 트리플 -->
-                <div class="bg-slate-800/80 p-3 rounded-xl border border-slate-700 flex flex-col gap-1.5">
-                    <div class="flex justify-between items-center">
-                        <span class="font-bold text-slate-200 text-sm">7. 트리플 (세트)</span>
-                        <span class="text-slate-400 text-[11px]">같은 카드가 3장</span>
-                    </div>
-                    <div class="flex gap-1.5">
-                        <span class="poker-card">A♠</span>
-                        <span class="poker-card red">A♦</span>
-                        <span class="poker-card">A♣</span>
-                        <span class="poker-card red">6♥</span>
-                        <span class="poker-card">9♣</span>
-                    </div>
-                </div>
-
-                <!-- 8. 투페어 -->
-                <div class="bg-slate-800/80 p-3 rounded-xl border border-slate-700 flex flex-col gap-1.5">
-                    <div class="flex justify-between items-center">
-                        <span class="font-bold text-slate-200 text-sm">8. 투페어</span>
-                        <span class="text-slate-400 text-[11px]">페어가 2개</span>
-                    </div>
-                    <div class="flex gap-1.5">
-                        <span class="poker-card">Q♣</span>
-                        <span class="poker-card">Q♠</span>
-                        <span class="poker-card">10♣</span>
-                        <span class="poker-card red">10♥</span>
-                        <span class="poker-card red">2♥</span>
-                    </div>
-                </div>
-
-                <!-- 9. 원페어 -->
-                <div class="bg-slate-800/80 p-3 rounded-xl border border-slate-700 flex flex-col gap-1.5">
-                    <div class="flex justify-between items-center">
-                        <span class="font-bold text-slate-300 text-sm">9. 원페어</span>
-                        <span class="text-slate-400 text-[11px]">같은 카드가 2장</span>
-                    </div>
-                    <div class="flex gap-1.5">
-                        <span class="poker-card">3♠</span>
-                        <span class="poker-card">3♣</span>
-                        <span class="poker-card">10♣</span>
-                        <span class="poker-card red">5♦</span>
-                        <span class="poker-card">2♠</span>
-                    </div>
-                </div>
-
-                <!-- 10. 하이카드 -->
-                <div class="bg-slate-800/80 p-3 rounded-xl border border-slate-700 flex flex-col gap-1.5">
-                    <div class="flex justify-between items-center">
-                        <span class="font-bold text-slate-400 text-sm">10. 하이카드</span>
-                        <span class="text-slate-400 text-[11px]">족보 없음 (높은 숫자 승)</span>
-                    </div>
-                    <div class="flex gap-1.5">
-                        <span class="poker-card">A♠</span>
-                        <span class="poker-card red">Q♦</span>
-                        <span class="poker-card">8♠</span>
-                        <span class="poker-card">9♣</span>
-                        <span class="poker-card red">2♦</span>
-                    </div>
-                </div>
-
-            </div>
-        </div>
+      <button onclick="requestClaimPot()" class="mt-4 w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl shadow-lg active:scale-95 transition">
+        🏆 팟 획득하기 (과반수 동의 필요)
+      </button>
     </div>
 
-    <!-- Loading Screen -->
-    <div id="loading-screen" class="absolute inset-0 z-30 bg-slate-900 flex flex-col items-center justify-center">
-        <div class="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
-        <p class="mt-4 text-slate-400 font-semibold">서버에 연결 중...</p>
+    <!-- 내 현황 & 베팅 컨트롤 -->
+    <div class="bg-slate-800 p-4 rounded-2xl border border-slate-700 shadow-md">
+      <div class="flex justify-between items-center mb-3">
+        <span class="text-sm text-slate-300 font-bold">👤 내 칩 잔액</span>
+        <span class="text-xl font-black text-amber-300"><span id="my-chips">0</span> 개</span>
+      </div>
+      
+      <div class="grid grid-cols-4 gap-2">
+        <button onclick="sendBet(1)" class="py-3 bg-slate-700 hover:bg-slate-600 font-bold rounded-xl active:scale-95 transition text-sm">+1 칩</button>
+        <button onclick="sendBet(5)" class="py-3 bg-slate-700 hover:bg-slate-600 font-bold rounded-xl active:scale-95 transition text-sm">+5 칩</button>
+        <button onclick="sendBet(10)" class="py-3 bg-slate-700 hover:bg-slate-600 font-bold rounded-xl active:scale-95 transition text-sm">+10 칩</button>
+        <button onclick="sendBet('all')" class="py-3 bg-rose-600/80 hover:bg-rose-600 font-bold rounded-xl active:scale-95 transition text-sm text-white">올인</button>
+      </div>
     </div>
 
-    <!-- Screen 1: Login / Join Room -->
-    <div id="auth-screen" class="w-full max-w-md p-6 flex flex-col gap-6 hide">
-        <div class="text-center mb-4">
-            <h1 class="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-400 via-indigo-400 to-purple-400 mb-2">CHIPS</h1>
-            <p class="text-slate-400">친구들과 함께하는 실시간 칩 베팅 앱</p>
-        </div>
-
-        <div class="glass-panel rounded-2xl p-6 flex flex-col gap-4">
-            <div>
-                <label class="block text-sm font-semibold text-slate-300 mb-1">내 이름</label>
-                <input type="text" id="player-name" class="w-full bg-slate-800 border border-slate-600 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-indigo-500" placeholder="이름을 입력하세요 (예: 철수)">
-            </div>
-            
-            <button id="btn-create-room" class="w-full py-4 mt-2 rounded-xl bg-indigo-600 text-white font-bold text-lg hover:bg-indigo-500 shadow-[0_0_15px_rgba(79,70,229,0.5)] transition">
-                새로운 방 만들기
-            </button>
-
-            <div class="relative flex items-center py-2">
-                <div class="flex-grow border-t border-slate-600"></div>
-                <span class="flex-shrink-0 mx-4 text-slate-500 text-sm">또는</span>
-                <div class="flex-grow border-t border-slate-600"></div>
-            </div>
-
-            <div>
-                <label class="block text-sm font-semibold text-slate-300 mb-1">방 코드 참여</label>
-                <div class="flex gap-2">
-                    <input type="text" id="room-code-input" class="w-full bg-slate-800 border border-slate-600 rounded-xl px-4 py-3 text-white uppercase focus:outline-none focus:border-indigo-500" placeholder="4자리 코드 입력" maxlength="4">
-                    <button id="btn-join-room" class="px-6 py-3 rounded-xl bg-slate-700 text-white font-bold hover:bg-slate-600 transition whitespace-nowrap">
-                        입장
-                    </button>
-                </div>
-            </div>
-        </div>
+    <!-- 접속 플레이어 목록 -->
+    <div class="bg-slate-800 p-4 rounded-2xl border border-slate-700 shadow-md">
+      <h3 class="text-xs font-bold text-slate-400 uppercase mb-3 flex justify-between">
+        <span>참여자 목록</span>
+        <span id="player-count">0명</span>
+      </h3>
+      <div id="player-list" class="space-y-2 max-h-48 overflow-y-auto pr-1"></div>
     </div>
+  </div>
 
-    <!-- Screen 2: Game Room -->
-    <div id="game-screen" class="w-full h-full max-w-md flex flex-col hide bg-slate-900">
-        
-        <!-- Header -->
-        <div class="glass-panel px-5 py-3.5 flex justify-between items-center border-b-0 rounded-b-3xl z-10 shadow-lg gap-2">
-            <div>
-                <p class="text-[10px] text-slate-400 font-semibold tracking-wider">ROOM CODE</p>
-                <h2 id="display-room-code" class="text-xl font-black text-white tracking-widest uppercase">----</h2>
-            </div>
+  <!-- 3. 과반수 동의 투표 모달 -->
+  <div id="vote-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50">
+    <div class="bg-slate-800 border-2 border-amber-500/60 p-6 rounded-2xl max-w-sm w-full text-center shadow-2xl">
+      <div class="text-4xl mb-2">🗳️</div>
+      <h3 class="text-lg font-bold text-amber-300 mb-1" id="vote-title">팟 획득 요청</h3>
+      <p class="text-sm text-slate-300 mb-4" id="vote-desc">홍길동 님이 팟(10개)을 가져가려고 합니다!</p>
+      
+      <div class="bg-slate-900 p-3 rounded-xl mb-4 border border-slate-700 text-xs text-slate-400">
+        동의 현황: <span id="vote-agree-count" class="font-bold text-emerald-400">0</span> / <span id="vote-target-count" class="font-bold">0</span> 명 필요
+      </div>
 
-            <!-- Hand Rankings Button -->
-            <button id="btn-open-hands" class="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500/20 to-yellow-500/20 border border-amber-500/50 text-amber-300 text-xs font-bold hover:bg-amber-500/30 transition flex items-center gap-1.5 shadow-sm">
-                <span>📜</span>
-                <span>족보</span>
-            </button>
-
-            <div class="text-right flex flex-col items-end">
-                <p class="text-xs text-slate-400 font-semibold mb-0.5" id="display-my-name">My Name</p>
-                <div class="bg-indigo-900/50 border border-indigo-500/60 px-2.5 py-0.5 rounded-lg flex items-center gap-1">
-                    <span class="text-xs">💰</span>
-                    <span id="display-my-chips" class="text-base font-bold text-indigo-300">0</span>
-                </div>
-            </div>
-        </div>
-
-        <!-- The Pot Area -->
-        <div class="flex-grow flex flex-col items-center justify-center p-6 gap-6 relative">
-            
-            <!-- Active Claim Banner (Majority Vote) -->
-            <div id="claim-banner" class="absolute top-2 w-full max-w-sm glass-panel p-4 rounded-xl border-2 border-amber-400 hide z-20 shadow-[0_0_20px_rgba(245,158,11,0.2)] bg-amber-900/40">
-                <p id="claim-text" class="text-white text-center font-semibold mb-3 text-sm whitespace-pre-line"></p>
-                <div class="flex justify-center gap-2">
-                    <button id="btn-approve-claim" class="bg-amber-500 hover:bg-amber-400 text-slate-900 font-bold px-6 py-2 rounded-lg transition shadow-lg hide">동의하기</button>
-                    <button id="btn-cancel-claim" class="bg-slate-600 hover:bg-slate-500 text-white font-bold px-6 py-2 rounded-lg transition shadow-lg hide">요청 취소</button>
-                </div>
-            </div>
-
-            <div class="relative flex flex-col items-center justify-center w-60 h-60 rounded-full glass-panel border-[4px] border-amber-500 shadow-[0_0_40px_rgba(245,158,11,0.25)]">
-                <p class="text-amber-400 font-extrabold tracking-widest text-xs mb-1">THE POT</p>
-                <h1 id="display-pot" class="text-5xl font-black text-white drop-shadow-md">0</h1>
-                <p class="text-slate-400 text-xs mt-1">Chips</p>
-                
-                <!-- Claim Button -->
-                <button id="btn-claim-pot" class="absolute -bottom-5 bg-gradient-to-r from-amber-500 to-orange-500 px-7 py-2.5 rounded-full text-white font-black text-base shadow-xl hover:scale-105 active:scale-95 transition-transform border-2 border-orange-300">
-                    팟 먹기! 🏆
-                </button>
-            </div>
-
-            <!-- Quick Bet Actions -->
-            <div class="flex gap-3 mt-6 w-full">
-                <button id="btn-bet-10" class="flex-1 glass-panel py-3.5 rounded-2xl font-bold text-base text-white hover:bg-slate-700 active:bg-slate-600 transition border-slate-600">
-                    +10 베팅
-                </button>
-                <button id="btn-bet-custom" class="flex-1 glass-panel py-3.5 rounded-2xl font-bold text-base text-white hover:bg-slate-700 active:bg-slate-600 transition border-slate-600">
-                    직접 입력
-                </button>
-            </div>
-        </div>
-
-        <!-- Players List -->
-        <div class="h-2/5 glass-panel rounded-t-3xl border-b-0 p-5 flex flex-col shadow-[0_-10px_30px_rgba(0,0,0,0.5)] z-10">
-            <h3 class="text-xs font-bold text-slate-400 mb-3 uppercase tracking-wider">Players</h3>
-            <div id="players-list" class="flex-grow overflow-y-auto flex flex-col gap-2.5 pb-2">
-                <!-- Players will be injected here -->
-            </div>
-        </div>
+      <div class="grid grid-cols-2 gap-3" id="vote-buttons">
+        <button onclick="castVote(true)" class="py-3 bg-emerald-600 hover:bg-emerald-500 font-bold rounded-xl text-white">👍 동의</button>
+        <button onclick="castVote(false)" class="py-3 bg-rose-600 hover:bg-rose-500 font-bold rounded-xl text-white">👎 거부</button>
+      </div>
     </div>
+  </div>
 
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, getDoc, updateDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+  <!-- 4. 족보(핸드 순위) 모달 -->
+  <div id="jokbo-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50">
+    <div class="bg-slate-800 border border-amber-500/50 rounded-2xl max-w-sm w-full max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+      <!-- 모달 헤더 -->
+      <div class="p-4 bg-slate-900 border-b border-slate-700 flex justify-between items-center">
+        <h2 class="text-base font-black text-amber-400 flex items-center gap-2">📜 텍사스 홀덤 족보</h2>
+        <button onclick="closeModal('jokbo-modal')" class="text-slate-400 hover:text-white font-bold text-lg px-2">✕</button>
+      </div>
+      
+      <!-- 족보 리스트 -->
+      <div class="p-4 overflow-y-auto space-y-3 text-sm">
+        <!-- 로얄플러쉬 -->
+        <div class="bg-slate-900/80 p-3 rounded-xl border border-amber-500/30">
+          <div class="flex justify-between font-bold text-amber-300 mb-1">
+            <span>1. 로얄 플러쉬</span>
+            <span class="text-xs text-slate-400 font-normal">최고의 족보</span>
+          </div>
+          <div class="text-xs text-slate-300">같은 무늬의 A, K, Q, J, 10</div>
+          <div class="mt-2 flex gap-1 font-bold text-xs">
+            <span class="px-2 py-1 bg-white text-slate-900 rounded">♠ A</span>
+            <span class="px-2 py-1 bg-white text-slate-900 rounded">♠ K</span>
+            <span class="px-2 py-1 bg-white text-slate-900 rounded">♠ Q</span>
+            <span class="px-2 py-1 bg-white text-slate-900 rounded">♠ J</span>
+            <span class="px-2 py-1 bg-white text-slate-900 rounded">♠ 10</span>
+          </div>
+        </div>
 
-        // Environment Variables Handling
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'chips-fury-clone';
-        const customToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-        let firebaseConfig = {};
+        <!-- 스트레이트 플러쉬 -->
+        <div class="bg-slate-900/80 p-3 rounded-xl border border-slate-700">
+          <div class="flex justify-between font-bold text-slate-200 mb-1">
+            <span>2. 스트레이트 플러쉬</span>
+          </div>
+          <div class="text-xs text-slate-400 mb-2">같은 무늬의 연속된 숫자의 카드 5장</div>
+          <div class="flex gap-1 font-bold text-xs">
+            <span class="px-2 py-1 bg-white text-red-600 rounded">♥ 9</span>
+            <span class="px-2 py-1 bg-white text-red-600 rounded">♥ 8</span>
+            <span class="px-2 py-1 bg-white text-red-600 rounded">♥ 7</span>
+            <span class="px-2 py-1 bg-white text-red-600 rounded">♥ 6</span>
+            <span class="px-2 py-1 bg-white text-red-600 rounded">♥ 5</span>
+          </div>
+        </div>
+
+        <!-- 포카드 -->
+        <div class="bg-slate-900/80 p-3 rounded-xl border border-slate-700">
+          <div class="flex justify-between font-bold text-slate-200 mb-1">
+            <span>3. 포카드 (Four of a Kind)</span>
+          </div>
+          <div class="text-xs text-slate-400 mb-2">같은 숫자의 카드 4장</div>
+          <div class="flex gap-1 font-bold text-xs">
+            <span class="px-2 py-1 bg-white text-slate-900 rounded">♠ A</span>
+            <span class="px-2 py-1 bg-white text-red-600 rounded">♥ A</span>
+            <span class="px-2 py-1 bg-white text-slate-900 rounded">♣ A</span>
+            <span class="px-2 py-1 bg-white text-red-600 rounded">♦ A</span>
+          </div>
+        </div>
+
+        <!-- 풀하우스 -->
+        <div class="bg-slate-900/80 p-3 rounded-xl border border-slate-700">
+          <div class="flex justify-between font-bold text-slate-200 mb-1">
+            <span>4. 풀하우스 (Full House)</span>
+          </div>
+          <div class="text-xs text-slate-400 mb-2">트리플(3장) + 원페어(2장)</div>
+          <div class="flex gap-1 font-bold text-xs">
+            <span class="px-2 py-1 bg-white text-slate-900 rounded">♠ K</span>
+            <span class="px-2 py-1 bg-white text-red-600 rounded">♥ K</span>
+            <span class="px-2 py-1 bg-white text-slate-900 rounded">♣ K</span>
+            <span class="px-2 py-1 bg-white text-red-600 rounded">♦ 7</span>
+            <span class="px-2 py-1 bg-white text-slate-900 rounded">♠ 7</span>
+          </div>
+        </div>
+
+        <!-- 플러쉬 -->
+        <div class="bg-slate-900/80 p-3 rounded-xl border border-slate-700">
+          <div class="flex justify-between font-bold text-slate-200 mb-1">
+            <span>5. 플러쉬 (Flush)</span>
+          </div>
+          <div class="text-xs text-slate-400">숫자 상관없이 같은 무늬 5장</div>
+        </div>
+
+        <!-- 스트레이트 -->
+        <div class="bg-slate-900/80 p-3 rounded-xl border border-slate-700">
+          <div class="flex justify-between font-bold text-slate-200 mb-1">
+            <span>6. 스트레이트 (Straight)</span>
+          </div>
+          <div class="text-xs text-slate-400">무늬 상관없이 연속된 숫자 5장</div>
+        </div>
+
+        <!-- 트리플 -->
+        <div class="bg-slate-900/80 p-3 rounded-xl border border-slate-700">
+          <div class="flex justify-between font-bold text-slate-200 mb-1">
+            <span>7. 트리플 (Three of a Kind)</span>
+          </div>
+          <div class="text-xs text-slate-400">같은 숫자 3장</div>
+        </div>
+
+        <!-- 투페어 / 원페어 / 하이카드 -->
+        <div class="bg-slate-900/80 p-3 rounded-xl border border-slate-700 space-y-1 text-xs">
+          <div><strong class="text-slate-200">8. 투페어:</strong> 같은 숫자 2장 세트 2개</div>
+          <div><strong class="text-slate-200">9. 원페어:</strong> 같은 숫자 2장 1세트</div>
+          <div><strong class="text-slate-200">10. 하이카드:</strong> 아무 족보도 없을 때 가장 높은 카드</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // 앱 상태 변수
+    let client, myId, myName, roomCode, coinValue;
+    let myChips = 0;
+    let potCount = 0;
+    let players = {}; // id -> { name, chips }
+    let currentVote = null;
+
+    // 모달 제어
+    function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
+    function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+
+    // 방 입장 및 MQTT 연결 (별도 키 없는 공용 웹소켓 라우터)
+    function joinRoom() {
+      myName = document.getElementById('input-name').value.trim();
+      roomCode = document.getElementById('input-room').value.trim();
+      coinValue = parseInt(document.getElementById('input-coin-val').value) || 1000;
+      myChips = parseInt(document.getElementById('input-init-chips').value) || 50;
+
+      if (!myName || !roomCode) return alert('이름과 방 이름을 입력해 주세요.');
+
+      myId = 'user_' + Math.random().toString(36).substring(2, 9);
+      
+      // 화면 전환
+      document.getElementById('login-screen').classList.add('hidden');
+      document.getElementById('game-screen').classList.remove('hidden');
+      document.getElementById('game-screen').classList.add('flex');
+      
+      document.getElementById('display-room').innerText = roomCode;
+      document.getElementById('display-coin-val').innerText = coinValue.toLocaleString();
+
+      // public MQTT broker 연결 (WSS 지원)
+      client = mqtt.connect('wss://broker.hivemq.com:8884/mqtt');
+
+      const topic = `poker-game-room-v2/${roomCode}`;
+
+      client.on('connect', () => {
+        client.subscribe(topic);
+        // 내 입장 알림 & 동기화 요청
+        broadcast({ type: 'JOIN', id: myId, name: myName, chips: myChips });
+        broadcast({ type: 'REQ_SYNC' });
+      });
+
+      client.on('message', (t, message) => {
         try {
-            if (typeof __firebase_config !== 'undefined') {
-                firebaseConfig = JSON.parse(__firebase_config);
-            }
-        } catch (e) {
-            console.error("Firebase config parse error", e);
+          const data = JSON.parse(message.toString());
+          handleMessage(data);
+        } catch(e) {}
+      });
+
+      updateUI();
+    }
+
+    // 메세지 브로드캐스트
+    function broadcast(data) {
+      const topic = `poker-game-room-v2/${roomCode}`;
+      client.publish(topic, JSON.stringify(data));
+    }
+
+    // 수신된 메세지 처리
+    function handleMessage(data) {
+      if (data.type === 'JOIN') {
+        players[data.id] = { name: data.name, chips: data.chips };
+        updateUI();
+      } 
+      else if (data.type === 'REQ_SYNC') {
+        // 기존 참가자들이 새 참가자에게 현재 상태 전송
+        broadcast({ type: 'RES_SYNC', id: myId, name: myName, chips: myChips, pot: potCount });
+      } 
+      else if (data.type === 'RES_SYNC') {
+        players[data.id] = { name: data.name, chips: data.chips };
+        if (data.pot > potCount) potCount = data.pot;
+        updateUI();
+      }
+      else if (data.type === 'BET') {
+        if (players[data.id]) {
+          players[data.id].chips -= data.amount;
+          if (data.id === myId) myChips -= data.amount;
         }
-
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-
-        // Global State
-        let currentUserId = null;
-        let currentRoomId = null;
-        let roomData = null;
-        let unsubscribeRoom = null;
-        const INITIAL_CHIPS = 1000;
-
-        // DOM Elements
-        const loadingScreen = document.getElementById('loading-screen');
-        const authScreen = document.getElementById('auth-screen');
-        const gameScreen = document.getElementById('game-screen');
-        
-        const playerNameInput = document.getElementById('player-name');
-        const roomCodeInput = document.getElementById('room-code-input');
-        
-        const btnCreateRoom = document.getElementById('btn-create-room');
-        const btnJoinRoom = document.getElementById('btn-join-room');
-        
-        const displayRoomCode = document.getElementById('display-room-code');
-        const displayMyName = document.getElementById('display-my-name');
-        const displayMyChips = document.getElementById('display-my-chips');
-        const displayPot = document.getElementById('display-pot');
-        const playersList = document.getElementById('players-list');
-        
-        const btnBet10 = document.getElementById('btn-bet-10');
-        const btnBetCustom = document.getElementById('btn-bet-custom');
-        const btnClaimPot = document.getElementById('btn-claim-pot');
-
-        // Poker Hands Modal Elements
-        const pokerHandsModal = document.getElementById('poker-hands-modal');
-        const btnOpenHands = document.getElementById('btn-open-hands');
-        const btnCloseHands = document.getElementById('btn-close-hands');
-
-        // Custom Input Modal Elements
-        const modal = document.getElementById('custom-modal');
-        const modalTitle = document.getElementById('modal-title');
-        const modalDesc = document.getElementById('modal-desc');
-        const modalInput = document.getElementById('modal-input');
-        const modalBtnConfirm = document.getElementById('modal-confirm');
-        const modalBtnCancel = document.getElementById('modal-cancel');
-        let modalConfirmAction = null;
-
-        // UI Helpers
-        function showToast(message, type = 'info') {
-            const container = document.getElementById('toast-container');
-            const toast = document.createElement('div');
-            const bg = type === 'error' ? 'bg-red-500' : (type === 'success' ? 'bg-emerald-600' : 'bg-slate-700');
-            toast.className = `${bg} text-white px-5 py-2.5 rounded-full shadow-lg font-semibold text-xs transform -translate-y-8 opacity-0 transition-all duration-300 text-center`;
-            toast.innerText = message;
-            container.appendChild(toast);
-            
-            setTimeout(() => {
-                toast.classList.remove('-translate-y-8', 'opacity-0');
-            }, 10);
-
-            setTimeout(() => {
-                toast.classList.add('-translate-y-8', 'opacity-0');
-                setTimeout(() => toast.remove(), 300);
-            }, 3000);
-        }
-
-        function switchScreen(screenId) {
-            loadingScreen.classList.add('hide');
-            authScreen.classList.add('hide');
-            gameScreen.classList.add('hide');
-            document.getElementById(screenId).classList.remove('hide');
-        }
-
-        function generateRoomCode() {
-            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-            let result = '';
-            for (let i = 0; i < 4; i++) {
-                result += chars.charAt(Math.floor(Math.random() * chars.length));
-            }
-            return result;
-        }
-
-        function getRoomPath(roomId) {
-            return doc(db, 'artifacts', appId, 'public', 'data', 'rooms', roomId.toUpperCase());
-        }
-
-        function showModal(title, desc, placeholder, onConfirm) {
-            modalTitle.innerText = title;
-            modalDesc.innerText = desc;
-            modalInput.placeholder = placeholder;
-            modalInput.value = '';
-            modal.classList.remove('hide');
-            modalInput.focus();
-            modalConfirmAction = onConfirm;
-        }
-
-        function hideModal() {
-            modal.classList.add('hide');
-            modalConfirmAction = null;
-        }
-
-        modalBtnCancel.addEventListener('click', hideModal);
-        modalBtnConfirm.addEventListener('click', () => {
-            const val = parseInt(modalInput.value, 10);
-            if (isNaN(val) || val <= 0) {
-                showToast('올바른 금액을 입력하세요.', 'error');
-                return;
-            }
-            if (modalConfirmAction) {
-                modalConfirmAction(val);
-            }
-            hideModal();
-        });
-
-        // Hand Rankings Modal Logic
-        btnOpenHands.addEventListener('click', () => {
-            pokerHandsModal.classList.remove('hide');
-        });
-
-        btnCloseHands.addEventListener('click', () => {
-            pokerHandsModal.classList.add('hide');
-        });
-
-        pokerHandsModal.addEventListener('click', (e) => {
-            if (e.target === pokerHandsModal) {
-                pokerHandsModal.classList.add('hide');
-            }
-        });
-
-        // App Initialization
-        async function init() {
-            try {
-                if (customToken) {
-                    await signInWithCustomToken(auth, customToken);
-                } else {
-                    await signInAnonymously(auth);
-                }
-                currentUserId = auth.currentUser.uid;
-                
-                const savedName = localStorage.getItem('bettingName');
-                if (savedName) playerNameInput.value = savedName;
-
-                switchScreen('auth-screen');
-            } catch (error) {
-                console.error("Auth error:", error);
-                showToast("인증 실패. 앱을 다시 로드해주세요.", "error");
-            }
-        }
-
-        // Create Room
-        btnCreateRoom.addEventListener('click', async () => {
-            const name = playerNameInput.value.trim();
-            if (!name) return showToast("이름을 입력해주세요.", "error");
-            localStorage.setItem('bettingName', name);
-
-            const roomId = generateRoomCode();
-            const roomRef = getRoomPath(roomId);
-
-            try {
-                switchScreen('loading-screen');
-                const initialData = {
-                    createdAt: new Date().toISOString(),
-                    pot: 0,
-                    players: {
-                        [currentUserId]: { name: name, chips: INITIAL_CHIPS }
-                    }
-                };
-                await setDoc(roomRef, initialData);
-                enterRoom(roomId, name);
-            } catch (error) {
-                console.error(error);
-                showToast("방 생성 실패", "error");
-                switchScreen('auth-screen');
-            }
-        });
-
-        // Join Room
-        btnJoinRoom.addEventListener('click', async () => {
-            const name = playerNameInput.value.trim();
-            let roomId = roomCodeInput.value.trim().toUpperCase();
-            
-            if (!name) return showToast("이름을 입력해주세요.", "error");
-            if (roomId.length !== 4) return showToast("4자리 방 코드를 입력해주세요.", "error");
-            
-            localStorage.setItem('bettingName', name);
-
-            try {
-                switchScreen('loading-screen');
-                const roomRef = getRoomPath(roomId);
-                const docSnap = await getDoc(roomRef);
-
-                if (!docSnap.exists()) {
-                    showToast("존재하지 않는 방입니다.", "error");
-                    switchScreen('auth-screen');
-                    return;
-                }
-
-                const data = docSnap.data();
-                if (!data.players[currentUserId]) {
-                    data.players[currentUserId] = { name: name, chips: INITIAL_CHIPS };
-                    await updateDoc(roomRef, { players: data.players });
-                }
-                
-                enterRoom(roomId, name);
-            } catch (error) {
-                console.error(error);
-                showToast("방 입장 실패", "error");
-                switchScreen('auth-screen');
-            }
-        });
-
-        // Enter Room & Listen to changes
-        function enterRoom(roomId, myName) {
-            currentRoomId = roomId;
-            displayRoomCode.innerText = roomId;
-            displayMyName.innerText = myName;
-
-            const roomRef = getRoomPath(roomId);
-            
-            unsubscribeRoom = onSnapshot(roomRef, (docSnap) => {
-                if (docSnap.exists()) {
-                    roomData = docSnap.data();
-                    updateUI();
-                } else {
-                    showToast("방이 삭제되었습니다.", "error");
-                    leaveRoom();
-                }
-            }, (error) => {
-                console.error("Listen failed: ", error);
-                showToast("데이터 동기화 오류", "error");
-            });
-
-            switchScreen('game-screen');
-        }
-
-        function leaveRoom() {
-            if (unsubscribeRoom) unsubscribeRoom();
-            currentRoomId = null;
-            roomData = null;
-            switchScreen('auth-screen');
-        }
-
-        // Update Game UI
-        function updateUI() {
-            if (!roomData || !roomData.players[currentUserId]) return;
-
-            // Update Pot
-            displayPot.innerText = roomData.pot || 0;
-
-            // Update Claim UI (Voting System)
-            const claimBanner = document.getElementById('claim-banner');
-            const claimText = document.getElementById('claim-text');
-            const btnApprove = document.getElementById('btn-approve-claim');
-            const btnCancel = document.getElementById('btn-cancel-claim');
-            
-            if (roomData.claim) {
-                claimBanner.classList.remove('hide');
-                btnClaimPot.disabled = true;
-                btnClaimPot.classList.add('opacity-50', 'cursor-not-allowed', 'scale-95');
-                
-                const claimer = roomData.players[roomData.claim.userId];
-                const claimerName = claimer ? claimer.name : "알 수 없음"; 
-                
-                const totalPlayers = Object.keys(roomData.players).length;
-                const approvals = roomData.claim.approvals ? roomData.claim.approvals.length : 0;
-                const required = Math.floor(totalPlayers / 2) + 1; // 과반수 계산
-                
-                if (roomData.claim.userId === currentUserId) {
-                    claimText.innerText = `내가 팟 획득을 요청했습니다!\n동의 대기중... (${approvals}/${required})`;
-                    btnApprove.classList.add('hide');
-                    btnCancel.classList.remove('hide');
-                } else {
-                    const hasApproved = roomData.claim.approvals && roomData.claim.approvals.includes(currentUserId);
-                    if (hasApproved) {
-                        claimText.innerText = `${claimerName}님의 팟 요청에 동의했습니다.\n(${approvals}/${required})`;
-                        btnApprove.classList.add('hide');
-                        btnCancel.classList.add('hide');
-                    } else {
-                        claimText.innerText = `${claimerName}님이 팟을 가져가려고 합니다!\n동의하시겠습니까? (${approvals}/${required})`;
-                        btnApprove.classList.remove('hide');
-                        btnCancel.classList.add('hide');
-                    }
-                }
-            } else {
-                claimBanner.classList.add('hide');
-                btnClaimPot.disabled = false;
-                btnClaimPot.classList.remove('opacity-50', 'cursor-not-allowed', 'scale-95');
-            }
-
-            // Update My Chips
-            const myData = roomData.players[currentUserId];
-            displayMyChips.innerText = myData.chips;
-
-            // Update Players List
-            playersList.innerHTML = '';
-            
-            const playerEntries = Object.entries(roomData.players).sort((a, b) => {
-                if (a[0] === currentUserId) return -1;
-                if (b[0] === currentUserId) return 1;
-                return a[1].name.localeCompare(b[1].name);
-            });
-
-            playerEntries.forEach(([uid, data]) => {
-                const isMe = uid === currentUserId;
-                const row = document.createElement('div');
-                row.className = `flex justify-between items-center p-3 rounded-xl ${isMe ? 'bg-indigo-900/30 border border-indigo-500/30' : 'bg-slate-800'}`;
-                
-                let actionButtonHtml = '';
-                if (!isMe) {
-                    actionButtonHtml = `<button onclick="triggerTransfer('${uid}', '${data.name}')" class="text-xs bg-slate-700 hover:bg-indigo-600 transition px-3 py-1.5 rounded-lg text-white font-semibold">보내기</button>`;
-                } else {
-                    actionButtonHtml = `<span class="text-xs font-bold text-indigo-400 px-2 py-1">ME</span>`;
-                }
-
-                row.innerHTML = `
-                    <div class="flex items-center gap-3">
-                        <div class="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-slate-300 font-bold text-sm border border-slate-600">
-                            ${data.name.charAt(0)}
-                        </div>
-                        <div>
-                            <p class="text-sm font-bold text-white">${data.name}</p>
-                            <p class="text-xs text-slate-400 font-semibold">${data.chips} 칩</p>
-                        </div>
-                    </div>
-                    ${actionButtonHtml}
-                `;
-                playersList.appendChild(row);
-            });
-        }
-
-        // Game Actions
-        async function performBet(amount) {
-            if (!currentRoomId || !roomData) return;
-            const myChips = roomData.players[currentUserId].chips;
-            
-            if (myChips < amount) {
-                showToast("칩이 부족합니다!", "error");
-                return;
-            }
-
-            const updatedPlayers = { ...roomData.players };
-            updatedPlayers[currentUserId].chips -= amount;
-            const newPot = (roomData.pot || 0) + amount;
-
-            try {
-                await updateDoc(getRoomPath(currentRoomId), {
-                    pot: newPot,
-                    players: updatedPlayers
-                });
-                showToast(`포트에 ${amount}칩을 베팅했습니다.`, "success");
-            } catch (e) {
-                console.error(e);
-                showToast("베팅 실패", "error");
-            }
-        }
-
-        btnBet10.addEventListener('click', () => performBet(10));
-        
-        btnBetCustom.addEventListener('click', () => {
-            const myChips = roomData.players[currentUserId].chips;
-            showModal('커스텀 베팅', `현재 내 칩: ${myChips}`, '베팅할 금액', (amount) => {
-                performBet(amount);
-            });
-        });
-
-        btnClaimPot.addEventListener('click', async () => {
-            if (btnClaimPot.disabled) return;
-            if (!currentRoomId || !roomData) return;
-            if ((roomData.pot || 0) === 0) {
-                showToast("가져갈 팟이 없습니다.", "info");
-                return;
-            }
-
-            try {
-                const totalPlayers = Object.keys(roomData.players).length;
-                if (totalPlayers === 1) {
-                    const potAmount = roomData.pot;
-                    const updatedPlayers = { ...roomData.players };
-                    updatedPlayers[currentUserId].chips += potAmount;
-                    
-                    await updateDoc(getRoomPath(currentRoomId), {
-                        pot: 0,
-                        players: updatedPlayers
-                    });
-                    showToast(`축하합니다! ${potAmount}칩을 획득했습니다! 🏆`, "success");
-                    confettiEffect();
-                    return;
-                }
-
-                await updateDoc(getRoomPath(currentRoomId), {
-                    claim: {
-                        userId: currentUserId,
-                        approvals: [currentUserId]
-                    }
-                });
-                showToast("팟 획득을 요청했습니다. 참가자들의 동의가 필요합니다.", "info");
-            } catch (e) {
-                console.error(e);
-                showToast("요청 실패", "error");
-            }
-        });
-
-        document.getElementById('btn-approve-claim').addEventListener('click', async () => {
-            if (!currentRoomId || !roomData || !roomData.claim) return;
-            
-            const updatedApprovals = [...(roomData.claim.approvals || []), currentUserId];
-            const totalPlayers = Object.keys(roomData.players).length;
-            const required = Math.floor(totalPlayers / 2) + 1;
-            
-            if (updatedApprovals.length >= required) {
-                const potAmount = roomData.pot;
-                const claimantId = roomData.claim.userId;
-                const updatedPlayers = { ...roomData.players };
-                
-                if (updatedPlayers[claimantId]) {
-                    updatedPlayers[claimantId].chips += potAmount;
-                }
-                
-                try {
-                    await updateDoc(getRoomPath(currentRoomId), {
-                        pot: 0,
-                        players: updatedPlayers,
-                        claim: null
-                    });
-                    
-                    if (claimantId === currentUserId) {
-                        showToast(`축하합니다! ${potAmount}칩을 획득했습니다! 🏆`, "success");
-                        confettiEffect();
-                    } else if (updatedPlayers[claimantId]) {
-                        showToast(`${updatedPlayers[claimantId].name}님이 ${potAmount}칩을 획득했습니다!`, "info");
-                    }
-                } catch (e) {
-                    console.error(e);
-                    showToast("승인 처리 실패", "error");
-                }
-            } else {
-                try {
-                    await updateDoc(getRoomPath(currentRoomId), {
-                        'claim.approvals': updatedApprovals
-                    });
-                } catch (e) {
-                    console.error(e);
-                    showToast("동의 실패", "error");
-                }
-            }
-        });
-
-        document.getElementById('btn-cancel-claim').addEventListener('click', async () => {
-            if (!currentRoomId || !roomData || !roomData.claim) return;
-            try {
-                await updateDoc(getRoomPath(currentRoomId), { claim: null });
-                showToast("팟 획득 요청을 취소했습니다.", "info");
-            } catch (e) {
-                console.error(e);
-            }
-        });
-
-        window.triggerTransfer = (targetUid, targetName) => {
-            if (!currentRoomId || !roomData) return;
-            const myChips = roomData.players[currentUserId].chips;
-            
-            showModal(`${targetName}에게 칩 보내기`, `현재 내 칩: ${myChips}`, '보낼 금액', async (amount) => {
-                if (myChips < amount) {
-                    showToast("칩이 부족합니다!", "error");
-                    return;
-                }
-
-                const updatedPlayers = { ...roomData.players };
-                updatedPlayers[currentUserId].chips -= amount;
-                updatedPlayers[targetUid].chips += amount;
-
-                try {
-                    await updateDoc(getRoomPath(currentRoomId), {
-                        players: updatedPlayers
-                    });
-                    showToast(`${targetName}에게 ${amount}칩을 보냈습니다.`, "success");
-                } catch (e) {
-                    console.error(e);
-                    showToast("전송 실패", "error");
-                }
-            });
+        potCount += data.amount;
+        updateUI();
+      }
+      else if (data.type === 'START_VOTE') {
+        currentVote = {
+          voteId: data.voteId,
+          claimantId: data.claimantId,
+          claimantName: data.claimantName,
+          pot: data.pot,
+          agrees: [data.claimantId], // 신청자는 자동 동의
+          voted: [data.claimantId]
         };
-
-        function confettiEffect() {
-            const colors = ['#f59e0b', '#3b82f6', '#ef4444', '#10b981'];
-            for(let i=0; i<30; i++) {
-                const conf = document.createElement('div');
-                conf.style.position = 'fixed';
-                conf.style.width = '10px';
-                conf.style.height = '10px';
-                conf.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
-                conf.style.left = Math.random() * 100 + 'vw';
-                conf.style.top = '-10px';
-                conf.style.borderRadius = Math.random() > 0.5 ? '50%' : '0';
-                conf.style.zIndex = '9999';
-                conf.style.transition = 'transform 2s cubic-bezier(.37,0,.9,.4), opacity 2s ease-out';
-                
-                document.body.appendChild(conf);
-                
-                setTimeout(() => {
-                    conf.style.transform = `translate(${Math.random()*200-100}px, 100vh) rotate(${Math.random()*720}deg)`;
-                    conf.style.opacity = '0';
-                }, 50);
-
-                setTimeout(() => conf.remove(), 2000);
-            }
+        showVoteUI();
+      }
+      else if (data.type === 'CAST_VOTE') {
+        if (!currentVote || currentVote.voteId !== data.voteId) return;
+        
+        if (!currentVote.voted.includes(data.voterId)) {
+          currentVote.voted.push(data.voterId);
+          if (data.agree) currentVote.agrees.push(data.voterId);
         }
 
-        init();
-    </script>
+        const totalPlayers = Object.keys(players).length || 1;
+        const requiredVotes = Math.floor(totalPlayers / 2) + 1; // 과반수 (절반 초과)
+
+        document.getElementById('vote-agree-count').innerText = currentVote.agrees.length;
+        document.getElementById('vote-target-count').innerText = requiredVotes;
+
+        // 과반수 동의 달성 시 팟 지급 처리
+        if (currentVote.agrees.length >= requiredVotes) {
+          if (currentVote.claimantId === myId) {
+            myChips += currentVote.pot;
+          }
+          if (players[currentVote.claimantId]) {
+            players[currentVote.claimantId].chips += currentVote.pot;
+          }
+          alert(`🎉 [${currentVote.claimantName}] 님이 과반수 동의를 얻어 ${currentVote.pot} 칩을 가져갔습니다!`);
+          potCount = 0;
+          currentVote = null;
+          closeModal('vote-modal');
+          updateUI();
+        }
+      }
+    }
+
+    // 베팅 보내기
+    function sendBet(amount) {
+      if (amount === 'all') amount = myChips;
+      if (amount <= 0 || myChips < amount) return alert('칩이 부족합니다.');
+      
+      broadcast({ type: 'BET', id: myId, amount: amount });
+    }
+
+    // 팟 획득 투표 요청
+    function requestClaimPot() {
+      if (potCount <= 0) return alert('현재 팟이 비어있습니다.');
+      const voteId = 'vote_' + Date.now();
+      broadcast({
+        type: 'START_VOTE',
+        voteId: voteId,
+        claimantId: myId,
+        claimantName: myName,
+        pot: potCount
+      });
+    }
+
+    // 투표 표 행사
+    function castVote(agree) {
+      if (!currentVote) return;
+      broadcast({
+        type: 'CAST_VOTE',
+        voteId: currentVote.voteId,
+        voterId: myId,
+        agree: agree
+      });
+      document.getElementById('vote-buttons').classList.add('hidden');
+    }
+
+    // 투표 모달 띄우기
+    function showVoteUI() {
+      const totalPlayers = Object.keys(players).length || 1;
+      const requiredVotes = Math.floor(totalPlayers / 2) + 1;
+
+      document.getElementById('vote-title').innerText = '팟 획득 요청';
+      document.getElementById('vote-desc').innerText = `${currentVote.claimantName} 님이 팟(${currentVote.pot}개)을 가져가려고 합니다!`;
+      document.getElementById('vote-agree-count').innerText = currentVote.agrees.length;
+      document.getElementById('vote-target-count').innerText = requiredVotes;
+
+      if (currentVote.claimantId === myId) {
+        document.getElementById('vote-buttons').classList.add('hidden');
+      } else {
+        document.getElementById('vote-buttons').classList.remove('hidden');
+      }
+
+      openModal('vote-modal');
+    }
+
+    // UI 동기화 업데이트
+    function updateUI() {
+      document.getElementById('my-chips').innerText = myChips;
+      document.getElementById('pot-count').innerText = potCount;
+      document.getElementById('pot-money').innerText = (potCount * coinValue).toLocaleString();
+
+      const playerListEl = document.getElementById('player-list');
+      playerListEl.innerHTML = '';
+      
+      const pKeys = Object.keys(players);
+      document.getElementById('player-count').innerText = `${pKeys.length}명`;
+
+      pKeys.forEach(id => {
+        const p = players[id];
+        const isMe = id === myId;
+        const div = document.createElement('div');
+        div.className = `flex justify-between items-center p-2.5 rounded-xl border text-sm ${isMe ? 'bg-amber-500/10 border-amber-500/40' : 'bg-slate-900 border-slate-700/60'}`;
+        div.innerHTML = `
+          <span class="font-bold ${isMe ? 'text-amber-400' : 'text-slate-200'}">${p.name} ${isMe ? '(나)' : ''}</span>
+          <span class="font-black text-amber-300">${p.chips} 🪙</span>
+        `;
+        playerListEl.appendChild(div);
+      });
+    }
+  </script>
 </body>
 </html>
